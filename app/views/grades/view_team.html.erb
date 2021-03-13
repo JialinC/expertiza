@@ -22,21 +22,24 @@
 
 </script>
 <h2>Summary Report for assignment: <%= @assignment.name %></h2>
-<h4>Team: <%= @team.name %></h4>
+<!-- Anchor for Tag Heatgrid -->
+<span class="spn_tooltip" data-toggle="tooltip" data-placement="left" title="Color Legend: Grey indicates no tags available, Red indicates tag not complete, Green indicates tag complete.">color legend</span>
+<table id="tag_heat_grid" class="tag_heat_grid"></table>
+<h4>Team: <%= @team.name(session[:ip]) %></h4>
 <!--Obtain topic name from assignment helper-->
 <% topic_id, topic_name, users_for_curr_team, participants = get_data_for_list_submissions(@team) %>
 <% if @assignment.topics? %>
   <h4>Topic: <%= topic_id + '. ' + topic_name %></h4>
 <% end %>
 <!--Obtain only review scores-->
-<% rscore_review = Rscore.new(@pscore,:review) if @pscore[:review] %>
+<% if @pscore[:review]  %>
+<% rscore_review = Rscore.new(@pscore,:review)%>
 <h4>Average peer review score: <span class = "c5"><%= rscore_review.my_avg.is_a?(Float)? sprintf("%.2f",rscore_review.my_avg): rscore_review.my_avg %></span></h4>
-<!-- Show/Hide Tag Heatgrid -->
-<button id="tagHGButton" onclick="toggleTagGrid('tagHeatMap')" class="btn btn-default">Hide Tag HeatGrid</button>
+<%else %>
+  <h4> There are no reviews for this assignment</h4>
+<%end %>
 <!--Toggle submission-->
 <button onclick="toggleFunction('<%= @participant.id.to_s%>')" class="btn btn-default">Show Submission</button>
-<!-- Anchor for Tag Heatgrid -->
-<table id="tagHeatMap" cellpadding="0" cellspacing="0" ></table>
 <div id="<%= @participant.id.to_s%>" style="display:none;">
 <% if @participant.team.hyperlinks.try(:length) %>
   <%= render :partial => 'submitted_content/hyperlink', :locals => {participant: @participant, stage: @stage} %>
@@ -44,7 +47,6 @@
  <b>No Submission</b>
 <% end %>
 </div><br><br>
-
 <!-- For each of the models in the list, generate a heatgrid table. this is the outer most loop -->
 <% table_count = 0 %>
 <% @vmlist.each do |vm| %>
@@ -177,7 +179,7 @@
                             <tr>
                               <td>Review <%=index + 1%></td>
                               <td class="<%= row.score_row[index].color_code.to_s %>" align="center" ><%= row.score_row[index].score_value.to_s %></td>
-                              <td>
+                              <td id="<%= 'rr'+ j.to_s + '_' + index.to_s %>" data-qNum="<%= j.to_s %>" data-rNum="<%= index.to_s %>" data-hasTag="<%= row.score_row[index].vm_prompts.count > 0 ? "true":"false"%>">
                                 <%= row.score_row[index].comment.html_safe unless row.score_row[index].comment.nil?  %>
                                 <% if row.score_row[index].vm_prompts.count > 0 %>
                                     <div class="tag_prompt_container">
@@ -197,7 +199,7 @@
                 <% j += 1 %>
             <% end %>
 
-            <!--displays the row for the add'l comments, by default: collapsed. -->
+            <!--displays the row for the addl comments, by default: collapsed. -->
             <tr>
               <td colspan="<%= (i+1).to_s %>" class="hiddenRow" >
                 <div id="hid<%= vm.questionnaire_type + vm.round.to_s + "comment" %>" class="accordion-body collapse" style="margin-left:10px;">
@@ -237,15 +239,24 @@
 <% end %>
 <!-- termination of the main outer loop.-->
 
-<h4 style="font-weight:bold;display:inline-block;">Grade and comment for submission</h4><br/>
-<% if ['Student'].include? current_user.role.name %>
-  Grade: <%= label_tag 'grade_for_submission', @team.try(:grade_for_submission) %><br/>
-  Comment: <%= label_tag 'comment_for_submission', @team.try(:comment_for_submission) %>
-<% else %>
-  <%= form_tag 'save_grade_and_comment_for_submission' do %>
-    <%= hidden_field_tag :participant_id, params[:id] %>
-    <%= number_field_tag 'grade_for_submission', @team.try(:grade_for_submission) ,min: 0, max: 100, maxlength: 3, size: 3, class: "form-control width-150", placeholder: 'Grade' %><br/>
-    <%= text_area_tag 'comment_for_submission', @team.try(:comment_for_submission), size: '75x10', placeholder: 'Comment', class: "form-control width-500" %><br>
-    <%= submit_tag 'Save' ,class: "btn btn-default" %>
+<!-- Get course ID and TA ID to restrict TAs ability to update his grades-->
+<%
+   @course_id = Assignment.find_by(id: @participant.parent_id).course_id;
+   @ta_id = @participant.user_id;  
+%>
+
+
+  <h4 style="font-weight:bold;display:inline-block;">Grade and comment for submission</h4><br/>
+  <% if ['Student', 'Teaching Assistant'].include? current_user.role.name %>
+    Grade: <%= label_tag 'grade_for_submission', @team.try(:grade_for_submission) %><br/>
+    Comment: <%= label_tag 'comment_for_submission', @team.try(:comment_for_submission) %><br>
   <% end %>
-<% end %>
+  <% if TaMapping.where(ta_id: @ta_id, course_id: @course_id).exists? %>
+  <h4 style="font-weight:bold;display:inline-block;">TA Grade-Comment:</h4><br/>
+    <%= form_tag 'save_grade_and_comment_for_submission' do %>
+      <%= hidden_field_tag :participant_id, params[:id] %>
+      <%= number_field_tag 'grade_for_submission', @team.try(:grade_for_submission) ,min: 0, max: 100, maxlength: 3, size: 3, class: "form-control width-150", placeholder: 'Grade' %><br/>
+      <%= text_area_tag 'comment_for_submission', @team.try(:comment_for_submission), size: '75x10', placeholder: 'Comment', class: "form-control width-500" %><br>
+      <%= submit_tag 'Save' ,class: "btn btn-default" %>
+    <% end %>
+  <% end %>
